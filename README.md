@@ -1,4 +1,4 @@
-put your UČOs (and names) on this line (no exact format required)
+Petr Babič, 525007
 ## PV021 project -- Deep Learning from Scratch
 
 ### DEADLINE
