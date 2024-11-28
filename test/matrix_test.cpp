@@ -6,8 +6,8 @@ class MatrixMultiplicationTest : public ::testing::Test {
 protected:
     template<unsigned COLS, unsigned ROWS>
     static void expect_equal(const matrix<COLS, ROWS>& result, const matrix<COLS, ROWS>& expected) {
-        for (unsigned col = 0; col < COLS; ++col)
-            for (unsigned row = 0; row < ROWS; ++row)
+        for (std::size_t col = 0; col < COLS; ++col)
+            for (std::size_t row = 0; row < ROWS; ++row)
                 EXPECT_FLOAT_EQ((result[col, row]), (expected[col, row]))
                     << "Mismatch at position: [" << col << ", " << row << "].";
     }

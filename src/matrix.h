@@ -5,8 +5,8 @@
 #include <random>
 #include <cstring>
 #include <algorithm>
-
-// #include "vec.h"
+#include <memory>
+#include <vector>
 
 
 namespace init {
@@ -31,29 +31,26 @@ enum class random_t { normal_glorot, normal_he };
 
 template<unsigned COLS, unsigned ROWS>
 struct matrix {
-    matrix() : data{} {}
-    explicit matrix(std::array<float, COLS * ROWS> data) : data{std::move(data)} {}
+    matrix() : data{std::make_unique<data_t>()} {}
+    explicit matrix(std::array<float, COLS * ROWS> data)
+            : data{std::make_unique<data_t>(std::move(data))} {}
 
-    explicit matrix(matrix&& other) noexcept : data{std::move(other.data)} {}
+    matrix(matrix&& other) noexcept : data{std::move(other.data)} {}
     matrix& operator=(matrix&& other) noexcept {
         data = std::move(other.data);
         return *this;
     }
-    matrix(const matrix& other) = default;
-    matrix& operator=(const matrix& other) = default;
+    matrix(const matrix& other) : data{std::make_unique<data_t>(*other.data)} {}
+    matrix& operator=(const matrix& other) {
+        data = std::make_unique<data_t>(*other.data);
+        return *this;
+    }
     ~matrix() = default;
 
-    // vec_t<COLS> row(std::size_t i) const {
-    //     vec_t<COLS> r;
-    //     std::memcpy(r.data(), data.data() + COLS * i,
-    //         sizeof(decltype(data.front())) * COLS);
-    //     return r;
-    // }
-
     void print() const {
-        for (unsigned row = 0; row < ROWS; ++row) {
-            for (unsigned col = 0; col < COLS; ++col) {
-                std::cout << data[row * COLS + col] << ", ";
+        for (std::size_t row = 0; row < ROWS; ++row) {
+            for (std::size_t col = 0; col < COLS; ++col) {
+                std::cout << (*data)[row * COLS + col] << ", ";
             }
             std::cout << std::endl;
         }
@@ -61,19 +58,19 @@ struct matrix {
 
     matrix<ROWS, COLS> transpose() const {
         matrix<ROWS, COLS> transposed;
-        for (unsigned col = 0; col < COLS; ++col)
-            for (unsigned row = 0; row < ROWS; ++row)
-                transposed.data[col * ROWS + row] = data[row * COLS + col];
+        for (std::size_t col = 0; col < COLS; ++col)
+            for (std::size_t row = 0; row < ROWS; ++row)
+                transposed[col * ROWS + row] = (*data)[row * COLS + col];
         return transposed;
     }
 
     template<unsigned NEW_COLS>
     friend matrix<NEW_COLS, ROWS> operator*(const matrix<COLS, ROWS>& l, const matrix<NEW_COLS, COLS>& r) {
         matrix<NEW_COLS, ROWS> result;
-        for (unsigned l_row = 0; l_row < ROWS; ++l_row) {
-            for (unsigned r_col = 0; r_col < NEW_COLS; ++r_col) {
+        for (std::size_t l_row = 0; l_row < ROWS; ++l_row) {
+            for (std::size_t r_col = 0; r_col < NEW_COLS; ++r_col) {
                 float sum = 0;
-                for (unsigned l_col = 0; l_col < COLS; ++l_col)
+                for (std::size_t l_col = 0; l_col < COLS; ++l_col)
                     sum += l[l_col, l_row] * r[r_col, l_col];
                 result[r_col, l_row] = sum;
             }
@@ -89,12 +86,12 @@ struct matrix {
      */
     friend matrix<COLS, ROWS> pmult(matrix<COLS, ROWS> a, const matrix<COLS, ROWS>& b) {
         for (std::size_t i = 0; i < ROWS * COLS; ++i)
-            a.data[i] *= b.data[i];
+            a[i] *= b[i];
         return a;
     }
 
     matrix& operator*=(float x) {
-        for (float& y : data)
+        for (float& y : *data)
             y *= x;
         return *this;
     }
@@ -105,7 +102,7 @@ struct matrix {
 
     matrix& operator+=(const matrix& m) {
         for (std::size_t i = 0; i < ROWS * COLS; ++i)
-            data[i] += m.data[i];
+            (*data)[i] += m[i];
         return *this;
     }
     friend matrix operator+(matrix m1, const matrix& m2) {
@@ -115,7 +112,7 @@ struct matrix {
 
     matrix& operator-=(const matrix& m) {
         for (std::size_t i = 0; i < ROWS * COLS; ++i)
-            data[i] -= m.data[i];
+            (*data)[i] -= m[i];
         return *this;
     }
     friend matrix operator-(matrix m1, const matrix& m2) {
@@ -124,22 +121,29 @@ struct matrix {
     }
 
     float operator[](std::size_t col, std::size_t row) const {
-        return data[row * COLS + col];
+        return (*data)[row * COLS + col];
     }
     float& operator[](std::size_t col, std::size_t row) {
-        return data[row * COLS + col];
+        return (*data)[row * COLS + col];
+    }
+
+    float operator[](std::size_t i) const {
+        return (*data)[i];
+    }
+    float& operator[](std::size_t i) {
+        return (*data)[i];
     }
 
     static matrix random(random_t rt) {
-        matrix m;
-        for (unsigned i = 0; i < COLS * ROWS; ++i) {
+        matrix m{};
+        for (std::size_t i = 0; i < COLS * ROWS; ++i) {
             switch (rt) {
-            case random_t::normal_glorot:
-                m.data[i] = init::normal_glorot<COLS - 1, ROWS>();
-                break;
-            case random_t::normal_he:
-                m.data[i] = init::normal_he<COLS - 1>();
-                break;
+                case random_t::normal_glorot:
+                    m[i] = init::normal_glorot<COLS, ROWS>();
+                    break;
+                case random_t::normal_he:
+                    m[i] = init::normal_he<COLS>();
+                    break;
             }
         }
 
@@ -147,14 +151,16 @@ struct matrix {
     }
 
     static matrix ones() {
-        matrix m;
-        std::ranges::fill(m.data, 1.f);
+        matrix m{};
+        std::ranges::fill(*m.data, 1.f);
         return m;
     }
 
     static constexpr unsigned cols = COLS, rows = ROWS;
 
-    std::array<float, ROWS * COLS> data;
+private:
+    using data_t = std::array<float, ROWS * COLS>;
+    std::unique_ptr<data_t> data;
 };
 
 #endif //MATRIX_H

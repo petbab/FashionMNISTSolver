@@ -36,19 +36,37 @@ typedef float(*unary_f)(float);
 template<unary_f F, unsigned COLS, unsigned ROWS>
 matrix<COLS, ROWS> apply(const matrix<COLS, ROWS>& xs) {
     matrix<COLS, ROWS> result;
-    for (unsigned i = 0; i < ROWS * COLS; ++i)
-        result.data[i] = F(xs.data[i]);
+    for (std::size_t i = 0; i < ROWS * COLS; ++i)
+        result[i] = F(xs[i]);
     return result;
 }
 
-void softmax(auto &inner_potentials) {
-    float denom = 0.;
-    for (const auto &p : inner_potentials)
-        denom += std::exp(p);
+template<unsigned BATCH_SIZE, unsigned NEURONS>
+matrix<BATCH_SIZE, NEURONS> softmax(const matrix<BATCH_SIZE, NEURONS> &potentials) {
+    matrix<BATCH_SIZE, NEURONS> result;
+    for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
+        float denom = 0.;
+        for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
+            denom += std::exp(potentials[batch, neuron]);
 
-    for (float &ip : inner_potentials)
-        ip = std::exp(ip) / denom;
+        for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
+            result[batch, neuron] = std::exp(potentials[batch, neuron]) / denom;
+    }
+    return result;
 }
 
+template<unsigned BATCH_SIZE, unsigned NEURONS>
+matrix<BATCH_SIZE, NEURONS> dsoftmax(const matrix<BATCH_SIZE, NEURONS> &potentials) {
+    matrix<BATCH_SIZE, NEURONS> result;
+    for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
+        float sum = 0.;
+        for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
+            sum += std::exp(potentials[batch, neuron]);
+
+        for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
+            result[batch, neuron] = (sum - std::exp(potentials[batch, neuron])) / (sum * sum);
+    }
+    return result;
+}
 
 #endif //MATH_H

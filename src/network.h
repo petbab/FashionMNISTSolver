@@ -2,18 +2,18 @@
 #define NETWORK_H
 
 #include "matrix.h"
-#include "csv_reader.h"
 #include "activation.h"
 
 
 class network {
 public:
     static constexpr unsigned batch_size = 4;
-    static constexpr unsigned input_size = 2;
-    static constexpr unsigned output_size = 1;
+    static constexpr unsigned input_size = 28 * 28;
+    static constexpr unsigned output_size = 10;
 
     using input_t = matrix<batch_size, input_size>;
     using output_t = matrix<batch_size, output_size>;
+    using labels_t = std::array<unsigned, batch_size>;
 
 private:
     template<
@@ -28,13 +28,15 @@ private:
         using biases_t = matrix<1, NEURONS>;
         using neurons_t = matrix<batch_size, NEURONS>;
 
-        layer_t() : weights{weights_t::random(WEIGHT_INIT_METHOD)} {}
+        layer_t()
+          : weights{weights_t::random(WEIGHT_INIT_METHOD)},
+            biases{biases_t::random(WEIGHT_INIT_METHOD)} {}
 
         void compute_inner_potentials(const matrix<batch_size, PREV_NEURONS>& inputs) {
             potentials = weights * inputs;
             for (std::size_t i = 0; i < neurons; ++i)
                 for (std::size_t j = 0; j < batch_size; ++j)
-                    potentials[j, i] += biases.data[i];
+                    potentials[j, i] += biases[i];
         }
 
         weights_t weights;
@@ -42,7 +44,7 @@ private:
         neurons_t potentials, activations;
     };
 
-    using hidden_layer_t = layer_t<input_size, 4, random_t::normal_he>;
+    using hidden_layer_t = layer_t<input_size, 256, random_t::normal_he>;
     using output_layer_t = layer_t<hidden_layer_t::neurons, output_size, random_t::normal_glorot>;
 
 public:
@@ -50,20 +52,23 @@ public:
         hidden.compute_inner_potentials(inputs);
         hidden.activations = apply<ReLU>(hidden.potentials);
         output.compute_inner_potentials(hidden.activations);
-        output.activations = apply<sigmoid>(output.potentials);
+        output.activations = softmax(output.potentials);
         return output.activations;
     }
 
-    void backpropagation(const input_t& inputs, const matrix<batch_size, 1>& labels, float learning_rate) {
+    void backpropagation(const input_t& inputs, const labels_t& labels, float learning_rate) {
         // Forward pass
         output_t outputs = evaluate(inputs);
 
         // Backward pass
-        output_t output_dE_dy;
-        for (unsigned i = 0; i < batch_size; ++i)
-            output_dE_dy.data[i] = (1 - labels.data[i]) / (1 - outputs.data[i]) - labels.data[i] / outputs.data[i];
+        output_t output_dE_dy{};
+        for (unsigned label : labels)
+            for (std::size_t i = 0; i < batch_size; ++i)
+                output_dE_dy[i, label] += 1.f;
+        for (std::size_t i = 0; i < output_t::rows * output_t::cols; ++i)
+            output_dE_dy[i] /= -static_cast<float>(batch_size) * outputs[i];
 
-        auto output_dE_dy_dsigma = pmult(apply<dsigmoid>(output.potentials), output_dE_dy);
+        auto output_dE_dy_dsigma = pmult(dsoftmax(output.potentials), output_dE_dy);
         auto hidden_dE_dy = output.weights.transpose() * output_dE_dy_dsigma;
 
         output_layer_t::weights_t output_dE_dw = output_dE_dy_dsigma * hidden.activations.transpose();
