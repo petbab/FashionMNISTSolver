@@ -3,7 +3,6 @@
 #include <fstream>
 
 #include "matrix.h"
-#include "network.h"
 
 
 class csv {
@@ -24,19 +23,20 @@ public:
             throw std::runtime_error("Could not open file: " + file_path);
     }
 
-    network::labels_t read_batch_labels() {
-        network::labels_t result;
-        for (std::size_t batch = 0; batch < network::batch_size; ++batch)
+    template<class LABELS_T, unsigned BATCH_SIZE>
+    LABELS_T read_batch_labels() {
+        LABELS_T result;
+        for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch)
             file >> result[batch];
         return result;
     }
 
-    matrix<network::batch_size, network::input_size> read_batch() {
-        matrix<network::batch_size, network::input_size> result;
+    template<unsigned BATCH_SIZE, unsigned INPUT_SIZE>
+    matrix<BATCH_SIZE, INPUT_SIZE> read_batch() {
+        matrix<BATCH_SIZE, INPUT_SIZE> result;
 
-        std::string line;
-        for (std::size_t batch = 0; batch < network::batch_size; ++batch) {
-            for (std::size_t i = 0; i < network::input_size; ++i) {
+        for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
+            for (std::size_t i = 0; i < INPUT_SIZE; ++i) {
                 float color;
                 file >> color;
                 result[batch, i] = color / 255.f;
@@ -47,7 +47,7 @@ public:
         return result;
     }
 
-    void write_batch(const network::labels_t& batch) {
+    void write_batch(const auto& batch) {
         for (unsigned label : batch)
             file << label << '\n';
     }

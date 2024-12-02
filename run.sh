@@ -2,17 +2,14 @@
 ## change this file to your needs
 
 echo "Adding some modules"
-
-# module add gcc-10.2
-
+module add gcc-12.2
 
 echo "#################"
 echo "    COMPILING    "
 echo "#################"
 
-## dont forget to use comiler optimizations (e.g. -O3 or -Ofast)
-# g++ -Wall -std=c++17 -O3 src/main.cpp src/file2.cpp -o network
-
+## dont forget to use compiler optimizations (e.g. -O3 or -Ofast)
+g++ -std=c++23 -O3 src/main.cpp src/*.h -o network
 
 echo "#################"
 echo "     RUNNING     "
@@ -22,3 +19,4 @@ echo "#################"
 ## https://www.fi.muni.cz/tech/unix/computation.html.en
 ## especially if you are using multiple cores
 # nice -n 19 ./network
+./network

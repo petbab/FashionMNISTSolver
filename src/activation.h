@@ -55,18 +55,4 @@ matrix<BATCH_SIZE, NEURONS> softmax(const matrix<BATCH_SIZE, NEURONS> &potential
     return result;
 }
 
-template<unsigned BATCH_SIZE, unsigned NEURONS>
-matrix<BATCH_SIZE, NEURONS> dsoftmax(const matrix<BATCH_SIZE, NEURONS> &potentials) {
-    matrix<BATCH_SIZE, NEURONS> result;
-    for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
-        float sum = 0.;
-        for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
-            sum += std::exp(potentials[batch, neuron]);
-
-        for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
-            result[batch, neuron] = (sum - std::exp(potentials[batch, neuron])) / (sum * sum);
-    }
-    return result;
-}
-
 #endif //MATH_H
