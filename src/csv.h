@@ -52,6 +52,10 @@ public:
             file << label << '\n';
     }
 
+    void seek_begin() {
+        file.seekg(0);
+    }
+
 private:
     std::fstream file;
 };

@@ -5,17 +5,28 @@
 #include "activation.h"
 #include "csv.h"
 
+#include <iostream>
+#include <iomanip>
+
 
 class network {
 public:
-    // Hyper-parameters
-    static constexpr unsigned batch_size = 16;
+    // Hyper parameters
     static constexpr float learning_rate = 0.001;
+    static constexpr float momentum_factor = 0.5;
+
     static constexpr unsigned hidden1_neurons = 64;
     static constexpr unsigned hidden2_neurons = 32;
 
-    static constexpr unsigned training_set_size = 60'000;
+    static constexpr unsigned batch_size = 16;
+
+    // Inputs
+    static constexpr unsigned training_set_size = 50'000;
+    static constexpr unsigned validation_set_size = 10'000;
     static constexpr unsigned test_set_size = 10'000;
+
+    static constexpr float accuracy_threshold = 0.88;
+
     static constexpr unsigned input_size = 28 * 28;
     static constexpr unsigned output_size = 10;
 
@@ -46,8 +57,8 @@ private:
                     potentials[j, i] += biases[i];
         }
 
-        weights_t weights;
-        biases_t biases;
+        weights_t weights, weights_gradient;
+        biases_t biases, biases_gradient;
         neurons_t potentials, activations;
     };
 
@@ -62,28 +73,6 @@ private:
         hidden2.activations = apply<ReLU>(hidden2.potentials);
         output.compute_inner_potentials(hidden2.activations);
         output.activations = softmax(output.potentials);
-    }
-
-    void write_batch(csv& out) {
-        labels_t result;
-        for (std::size_t k = 0; k < batch_size; ++k) {
-            float max_value = 0;
-            for (std::size_t i = 0; i < output_layer_t::neurons; ++i) {
-                if (output.activations[k, i] > max_value) {
-                    max_value = output.activations[k, i];
-                    result[k] = i;
-                }
-            }
-        }
-        out.write_batch(result);
-    }
-    
-    float error(const input_t& inputs, const labels_t& labels) {
-        forward_pass(inputs);
-        float err = 0;
-        for (std::size_t k = 0; k < batch_size; ++k)
-            err -= std::log(output.activations[k, labels[k]]);
-        return err / static_cast<float>(batch_size);
     }
 
     void backpropagation(const input_t& inputs, const labels_t& labels) {
@@ -109,31 +98,80 @@ private:
         hidden1_layer_t::weights_t hidden1_dE_dw = hidden1_dE_dy_dsigma * inputs.transpose();
         hidden1_layer_t::biases_t hidden1_dE_dbias = hidden1_dE_dy_dsigma * ones;
 
+        // Update gradients with momentum
+        output.weights_gradient = momentum_factor * output.weights_gradient - learning_rate * output_dE_dw;
+        output.biases_gradient = momentum_factor * output.biases_gradient - learning_rate * output_dE_dbias;
+        hidden2.weights_gradient = momentum_factor * hidden2.weights_gradient - learning_rate * hidden2_dE_dw;
+        hidden2.biases_gradient = momentum_factor * hidden2.biases_gradient - learning_rate * hidden2_dE_dbias;
+        hidden1.weights_gradient = momentum_factor * hidden1.weights_gradient - learning_rate * hidden1_dE_dw;
+        hidden1.biases_gradient = momentum_factor * hidden1.biases_gradient - learning_rate * hidden1_dE_dbias;
+
         // Update weights
-        output.weights -= learning_rate * output_dE_dw;
-        output.biases -= learning_rate * output_dE_dbias;
-        hidden2.weights -= learning_rate * hidden2_dE_dw;
-        hidden2.biases -= learning_rate * hidden2_dE_dbias;
-        hidden1.weights -= learning_rate * hidden1_dE_dw;
-        hidden1.biases -= learning_rate * hidden1_dE_dbias;
+        output.weights += output.weights_gradient;
+        output.biases += output.biases_gradient;
+        hidden2.weights += hidden2.weights_gradient;
+        hidden2.biases += hidden2.biases_gradient;
+        hidden1.weights += hidden1.weights_gradient;
+        hidden1.biases += hidden1.biases_gradient;
+    }
+
+    labels_t predict_batch(const input_t& inputs) {
+        forward_pass(inputs);
+
+        labels_t result;
+        for (std::size_t k = 0; k < batch_size; ++k) {
+            float max_value = 0;
+            for (std::size_t i = 0; i < output_layer_t::neurons; ++i) {
+                if (output.activations[k, i] > max_value) {
+                    max_value = output.activations[k, i];
+                    result[k] = i;
+                }
+            }
+        }
+        return result;
+    }
+
+    float validation_set_accuracy(csv& inputs, csv& labels) {
+        unsigned hits = 0;
+        for (std::size_t i = 0; i < validation_set_size / batch_size; ++i) {
+            auto input = inputs.read_batch<batch_size, input_size>();
+            auto label = labels.read_batch_labels<labels_t, batch_size>();
+            auto prediction = predict_batch(input);
+
+            for (std::size_t k = 0; k < batch_size; ++k)
+                if (prediction[k] == label[k])
+                    ++hits;
+        }
+
+        return static_cast<float>(hits) / static_cast<float>(validation_set_size);
     }
 
 public:
-    void learn(csv& inputs, csv& labels, csv& train_out) {
-        for (std::size_t i = 0; i < training_set_size / network::batch_size; ++i) {
-            auto input = inputs.read_batch<batch_size, input_size>();
-            auto label = labels.read_batch_labels<labels_t, batch_size>();
+    void learn(csv& inputs, csv& labels) {
+        std::cout << std::fixed << std::setprecision(2);
 
-            backpropagation(input, label);
-            write_batch(train_out);
+        float accuracy = 0;
+        for (unsigned epoch = 0; accuracy < accuracy_threshold; ++epoch) {
+            for (std::size_t i = 0; i < training_set_size / network::batch_size; ++i) {
+                auto input = inputs.read_batch<batch_size, input_size>();
+                auto label = labels.read_batch_labels<labels_t, batch_size>();
+
+                backpropagation(input, label);
+            }
+
+            accuracy = validation_set_accuracy(inputs, labels);
+            inputs.seek_begin();
+            labels.seek_begin();
+
+            std::cout << "Accuracy after epoch " << epoch << ": " << accuracy * 100.f << '\n';
         }
     }
 
-    void predict(csv& inputs, csv& test_out) {
-        for (std::size_t i = 0; i < test_set_size / network::batch_size; ++i) {
+    template<unsigned SIZE>
+    void predict(csv& inputs, csv& out) {
+        for (std::size_t i = 0; i < SIZE / network::batch_size; ++i) {
             auto input = inputs.read_batch<batch_size, input_size>();
-            forward_pass(input);
-            write_batch(test_out);
+            out.write_batch(predict_batch(input));
         }
     }
 
