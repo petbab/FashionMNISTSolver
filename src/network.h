@@ -13,19 +13,21 @@ class network {
 public:
     // Hyper parameters
     static constexpr float learning_rate = 0.001;
-    static constexpr float momentum_factor = 0.5;
+    static constexpr float momentum = 0.5;
+    static constexpr float weight_decay = 1.f - 1e-7;
 
     static constexpr unsigned hidden1_neurons = 64;
     static constexpr unsigned hidden2_neurons = 32;
 
     static constexpr unsigned batch_size = 16;
 
-    // Inputs
-    static constexpr unsigned training_set_size = 50'000;
-    static constexpr unsigned validation_set_size = 10'000;
-    static constexpr unsigned test_set_size = 10'000;
-
     static constexpr float accuracy_threshold = 0.88;
+    static constexpr unsigned max_epochs = 30;
+
+    // Inputs
+    static constexpr unsigned validation_set_size = 5'000;
+    static constexpr unsigned training_set_size = 60'000 - validation_set_size;
+    static constexpr unsigned test_set_size = 10'000;
 
     static constexpr unsigned input_size = 28 * 28;
     static constexpr unsigned output_size = 10;
@@ -99,20 +101,20 @@ private:
         hidden1_layer_t::biases_t hidden1_dE_dbias = hidden1_dE_dy_dsigma * ones;
 
         // Update gradients with momentum
-        output.weights_gradient = momentum_factor * output.weights_gradient - learning_rate * output_dE_dw;
-        output.biases_gradient = momentum_factor * output.biases_gradient - learning_rate * output_dE_dbias;
-        hidden2.weights_gradient = momentum_factor * hidden2.weights_gradient - learning_rate * hidden2_dE_dw;
-        hidden2.biases_gradient = momentum_factor * hidden2.biases_gradient - learning_rate * hidden2_dE_dbias;
-        hidden1.weights_gradient = momentum_factor * hidden1.weights_gradient - learning_rate * hidden1_dE_dw;
-        hidden1.biases_gradient = momentum_factor * hidden1.biases_gradient - learning_rate * hidden1_dE_dbias;
+        output.weights_gradient = momentum * output.weights_gradient - learning_rate * output_dE_dw;
+        output.biases_gradient = momentum * output.biases_gradient - learning_rate * output_dE_dbias;
+        hidden2.weights_gradient = momentum * hidden2.weights_gradient - learning_rate * hidden2_dE_dw;
+        hidden2.biases_gradient = momentum * hidden2.biases_gradient - learning_rate * hidden2_dE_dbias;
+        hidden1.weights_gradient = momentum * hidden1.weights_gradient - learning_rate * hidden1_dE_dw;
+        hidden1.biases_gradient = momentum * hidden1.biases_gradient - learning_rate * hidden1_dE_dbias;
 
         // Update weights
-        output.weights += output.weights_gradient;
-        output.biases += output.biases_gradient;
-        hidden2.weights += hidden2.weights_gradient;
-        hidden2.biases += hidden2.biases_gradient;
-        hidden1.weights += hidden1.weights_gradient;
-        hidden1.biases += hidden1.biases_gradient;
+        (output.weights *= weight_decay) += output.weights_gradient;
+        (output.biases *= weight_decay) += output.biases_gradient;
+        (hidden2.weights *= weight_decay) += hidden2.weights_gradient;
+        (hidden2.biases *= weight_decay) += hidden2.biases_gradient;
+        (hidden1.weights *= weight_decay) += hidden1.weights_gradient;
+        (hidden1.biases *= weight_decay) += hidden1.biases_gradient;
     }
 
     labels_t predict_batch(const input_t& inputs) {
@@ -151,8 +153,8 @@ public:
         std::cout << std::fixed << std::setprecision(2);
 
         float accuracy = 0;
-        for (unsigned epoch = 0; accuracy < accuracy_threshold; ++epoch) {
-            for (std::size_t i = 0; i < training_set_size / network::batch_size; ++i) {
+        for (unsigned epoch = 0; accuracy < accuracy_threshold && epoch < max_epochs; ++epoch) {
+            for (std::size_t i = 0; i < training_set_size / batch_size; ++i) {
                 auto input = inputs.read_batch<batch_size, input_size>();
                 auto label = labels.read_batch_labels<labels_t, batch_size>();
 
@@ -163,13 +165,13 @@ public:
             inputs.seek_begin();
             labels.seek_begin();
 
-            std::cout << "Accuracy after epoch " << epoch << ": " << accuracy * 100.f << '\n';
+            std::cout << "Accuracy after epoch " << epoch << ": " << accuracy * 100.f << "%\n";
         }
     }
 
     template<unsigned SIZE>
     void predict(csv& inputs, csv& out) {
-        for (std::size_t i = 0; i < SIZE / network::batch_size; ++i) {
+        for (std::size_t i = 0; i < SIZE / batch_size; ++i) {
             auto input = inputs.read_batch<batch_size, input_size>();
             out.write_batch(predict_batch(input));
         }
