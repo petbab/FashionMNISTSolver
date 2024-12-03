@@ -1,8 +1,13 @@
 #include "csv.h"
 #include "network.h"
+#include "timer.h"
+
+#include <iostream>
 
 
 int main() {
+    timer t{std::cout, "Total time"};
+
     csv train_inputs{"data/fashion_mnist_train_vectors.csv", csv::mode_t::read};
     csv labels{"data/fashion_mnist_train_labels.csv", csv::mode_t::read};
 
@@ -14,7 +19,7 @@ int main() {
     net.predict<network::test_set_size>(test_inputs, test_out);
 
     csv train_out{"train_predictions.csv", csv::mode_t::write};
-    net.predict<network::training_set_size + network::validation_set_size>(test_inputs, train_out);
+    net.predict<network::training_set_size + network::validation_set_size>(train_inputs, train_out);
 
     return 0;
 }
