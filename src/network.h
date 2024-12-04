@@ -4,26 +4,19 @@
 #include "matrix.h"
 #include "activation.h"
 #include "csv.h"
+#include "hyperparameters.h"
 
 #include <iostream>
 #include <iomanip>
 #include <array>
+#include <limits>
 
 
 class network {
 public:
-    // Hyper parameters
-    static constexpr float learning_rate = 0.001;
-    static constexpr float momentum = 0.5;
-    static constexpr float weight_decay = 1.f - 1e-7;
-
-    static constexpr unsigned hidden1_neurons = 64;
-    static constexpr unsigned hidden2_neurons = 32;
-
-    static constexpr unsigned batch_size = 16;
-
-    static constexpr float accuracy_threshold = 0.88;
-    static constexpr unsigned max_epochs = 30;
+    // Learning limits
+    static constexpr float accuracy_threshold = 0.882;
+    static constexpr unsigned max_epochs = 40;
 
     // Inputs
     static constexpr unsigned validation_set_size = 5'000;
@@ -33,8 +26,8 @@ public:
     static constexpr unsigned input_size = 28 * 28;
     static constexpr unsigned output_size = 10;
 
-    using input_t = matrix<batch_size, input_size>;
-    using labels_t = std::array<unsigned, batch_size>;
+    using input_t = matrix<cfg::batch_size, input_size>;
+    using labels_t = std::array<unsigned, cfg::batch_size>;
 
 private:
     template<
@@ -47,16 +40,16 @@ private:
 
         using weights_t = matrix<PREV_NEURONS, NEURONS>;
         using biases_t = matrix<1, NEURONS>;
-        using neurons_t = matrix<batch_size, NEURONS>;
+        using neurons_t = matrix<cfg::batch_size, NEURONS>;
 
         layer_t()
           : weights{init::random<weights_t::cols, PREV_NEURONS, NEURONS>(WEIGHT_INIT_METHOD)},
             biases{init::random<biases_t::cols, PREV_NEURONS, NEURONS>(WEIGHT_INIT_METHOD)} {}
 
-        void compute_inner_potentials(const matrix<batch_size, PREV_NEURONS>& inputs) {
+        void compute_inner_potentials(const matrix<cfg::batch_size, PREV_NEURONS>& inputs) {
             potentials = weights * inputs;
             for (std::size_t i = 0; i < neurons; ++i)
-                for (std::size_t j = 0; j < batch_size; ++j)
+                for (std::size_t j = 0; j < cfg::batch_size; ++j)
                     potentials[j, i] += biases[i];
         }
 
@@ -65,9 +58,9 @@ private:
         neurons_t potentials, activations;
     };
 
-    using hidden1_layer_t = layer_t<input_size, hidden1_neurons, init::random_t::normal_he>;
-    using hidden2_layer_t = layer_t<hidden1_neurons, hidden2_neurons, init::random_t::normal_he>;
-    using output_layer_t = layer_t<hidden2_neurons, output_size, init::random_t::normal_glorot>;
+    using hidden1_layer_t = layer_t<input_size, cfg::hidden1_neurons, init::random_t::normal_he>;
+    using hidden2_layer_t = layer_t<cfg::hidden1_neurons, cfg::hidden2_neurons, init::random_t::normal_he>;
+    using output_layer_t = layer_t<cfg::hidden2_neurons, output_size, init::random_t::normal_glorot>;
 
     void forward_pass(const input_t& inputs) {
         hidden1.compute_inner_potentials(inputs);
@@ -83,10 +76,10 @@ private:
 
         // Output layer gradient
         auto output_dE_dPotential = output.activations;
-        for (std::size_t k = 0; k < batch_size; ++k)
+        for (std::size_t k = 0; k < cfg::batch_size; ++k)
             output_dE_dPotential[k, labels[k]] -= 1.f;
         output_layer_t::weights_t output_dE_dw = output_dE_dPotential * hidden2.activations.transpose();
-        auto ones = matrix<1, batch_size>{1.f};
+        auto ones = matrix<1, cfg::batch_size>{1.f};
         output_layer_t::biases_t output_dE_dbias = output_dE_dPotential * ones;
 
         // Second hidden layer gradient
@@ -102,27 +95,27 @@ private:
         hidden1_layer_t::biases_t hidden1_dE_dbias = hidden1_dE_dy_dsigma * ones;
 
         // Update gradients with momentum
-        output.weights_gradient = momentum * output.weights_gradient - learning_rate * output_dE_dw;
-        output.biases_gradient = momentum * output.biases_gradient - learning_rate * output_dE_dbias;
-        hidden2.weights_gradient = momentum * hidden2.weights_gradient - learning_rate * hidden2_dE_dw;
-        hidden2.biases_gradient = momentum * hidden2.biases_gradient - learning_rate * hidden2_dE_dbias;
-        hidden1.weights_gradient = momentum * hidden1.weights_gradient - learning_rate * hidden1_dE_dw;
-        hidden1.biases_gradient = momentum * hidden1.biases_gradient - learning_rate * hidden1_dE_dbias;
+        output.weights_gradient = cfg::momentum * output.weights_gradient - cfg::learning_rate * output_dE_dw;
+        output.biases_gradient = cfg::momentum * output.biases_gradient - cfg::learning_rate * output_dE_dbias;
+        hidden2.weights_gradient = cfg::momentum * hidden2.weights_gradient - cfg::learning_rate * hidden2_dE_dw;
+        hidden2.biases_gradient = cfg::momentum * hidden2.biases_gradient - cfg::learning_rate * hidden2_dE_dbias;
+        hidden1.weights_gradient = cfg::momentum * hidden1.weights_gradient - cfg::learning_rate * hidden1_dE_dw;
+        hidden1.biases_gradient = cfg::momentum * hidden1.biases_gradient - cfg::learning_rate * hidden1_dE_dbias;
 
         // Update weights
-        (output.weights *= weight_decay) += output.weights_gradient;
-        (output.biases *= weight_decay) += output.biases_gradient;
-        (hidden2.weights *= weight_decay) += hidden2.weights_gradient;
-        (hidden2.biases *= weight_decay) += hidden2.biases_gradient;
-        (hidden1.weights *= weight_decay) += hidden1.weights_gradient;
-        (hidden1.biases *= weight_decay) += hidden1.biases_gradient;
+        (output.weights *= cfg::weight_decay) += output.weights_gradient;
+        (output.biases *= cfg::weight_decay) += output.biases_gradient;
+        (hidden2.weights *= cfg::weight_decay) += hidden2.weights_gradient;
+        (hidden2.biases *= cfg::weight_decay) += hidden2.biases_gradient;
+        (hidden1.weights *= cfg::weight_decay) += hidden1.weights_gradient;
+        (hidden1.biases *= cfg::weight_decay) += hidden1.biases_gradient;
     }
 
     labels_t predict_batch(const input_t& inputs) {
         forward_pass(inputs);
 
         labels_t result;
-        for (std::size_t k = 0; k < batch_size; ++k) {
+        for (std::size_t k = 0; k < cfg::batch_size; ++k) {
             float max_value = 0;
             for (std::size_t i = 0; i < output_layer_t::neurons; ++i) {
                 if (output.activations[k, i] > max_value) {
@@ -136,12 +129,12 @@ private:
 
     float validation_set_accuracy(csv& inputs, csv& labels) {
         unsigned hits = 0;
-        for (std::size_t i = 0; i < validation_set_size / batch_size; ++i) {
-            auto input = inputs.read_batch<batch_size, input_size>();
-            auto label = labels.read_batch_labels<labels_t, batch_size>();
+        for (std::size_t i = 0; i < validation_set_size / cfg::batch_size; ++i) {
+            auto input = inputs.read_batch<cfg::batch_size, input_size>();
+            auto label = labels.read_batch_labels<labels_t, cfg::batch_size>();
             auto prediction = predict_batch(input);
 
-            for (std::size_t k = 0; k < batch_size; ++k)
+            for (std::size_t k = 0; k < cfg::batch_size; ++k)
                 if (prediction[k] == label[k])
                     ++hits;
         }
@@ -151,17 +144,30 @@ private:
 
 public:
     void learn(csv& inputs, csv& labels) {
+        std::cout << std::setprecision(std::numeric_limits<long double>::digits10 + 1)
+                << "Hyperparameters:"
+                << "\n    learning_rate = " << cfg::learning_rate
+                << "\n    momentum = " << cfg::momentum
+                << "\n    weight_decay = " << cfg::weight_decay
+                << "\n    hidden1_neurons = " << cfg::hidden1_neurons
+                << "\n    hidden2_neurons = " << cfg::hidden2_neurons
+                << "\n    batch_size = " << cfg::batch_size << '\n';
+
         std::cout << std::fixed << std::setprecision(2);
 
-        float accuracy = 0;
-        for (unsigned epoch = 0; accuracy < accuracy_threshold && epoch < max_epochs; ++epoch) {
-            for (std::size_t i = 0; i < training_set_size / batch_size; ++i) {
-                auto input = inputs.read_batch<batch_size, input_size>();
-                auto label = labels.read_batch_labels<labels_t, batch_size>();
+        float accuracy = 0, prev_accuracy = 0;
+        for (unsigned epoch = 0; epoch < max_epochs; ++epoch) {
+            if (prev_accuracy >= accuracy_threshold && accuracy < prev_accuracy)
+                return;
+
+            for (std::size_t i = 0; i < training_set_size / cfg::batch_size; ++i) {
+                auto input = inputs.read_batch<cfg::batch_size, input_size>();
+                auto label = labels.read_batch_labels<labels_t, cfg::batch_size>();
 
                 backpropagation(input, label);
             }
 
+            prev_accuracy = accuracy;
             accuracy = validation_set_accuracy(inputs, labels);
             inputs.seek_begin();
             labels.seek_begin();
@@ -172,8 +178,8 @@ public:
 
     template<unsigned SIZE>
     void predict(csv& inputs, csv& out) {
-        for (std::size_t i = 0; i < SIZE / batch_size; ++i) {
-            auto input = inputs.read_batch<batch_size, input_size>();
+        for (std::size_t i = 0; i < SIZE / cfg::batch_size; ++i) {
+            auto input = inputs.read_batch<cfg::batch_size, input_size>();
             out.write_batch(predict_batch(input));
         }
     }
