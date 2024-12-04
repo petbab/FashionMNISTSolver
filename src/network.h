@@ -30,6 +30,13 @@ public:
     using labels_t = std::array<unsigned, cfg::batch_size>;
 
 private:
+    /**
+     * @brief Templated layer structure for neural network layers
+     *
+     * @tparam PREV_NEURONS Number of neurons in the previous layer
+     * @tparam NEURONS Number of neurons in the current layer
+     * @tparam WEIGHT_INIT_METHOD Method for initializing weights
+     */
     template<
         unsigned PREV_NEURONS,
         unsigned NEURONS,
@@ -62,6 +69,13 @@ private:
     using hidden2_layer_t = layer_t<cfg::hidden1_neurons, cfg::hidden2_neurons, init::random_t::normal_he>;
     using output_layer_t = layer_t<cfg::hidden2_neurons, output_size, init::random_t::normal_glorot>;
 
+    /**
+     * @brief Perform forward propagation through the network.
+     * Compute inner potentials and activations.
+     * The activation functions are ReLU in the hidden layers and softmax in the output layer.
+     *
+     * @param inputs Input batch to propagate through the network
+     */
     void forward_pass(const input_t& inputs) {
         hidden1.compute_inner_potentials(inputs);
         hidden1.activations = apply<ReLU>(hidden1.potentials);
@@ -71,6 +85,15 @@ private:
         output.activations = softmax(output.potentials);
     }
 
+    /**
+     * @brief Perform backpropagation to update network weights.
+     *
+     * The error function is categorical cross-entropy.
+     * The learning algorithm is SGD with momentum and weight decay.
+     *
+     * @param inputs Input batch
+     * @param labels Corresponding label batch
+     */
     void backpropagation(const input_t& inputs, const labels_t& labels) {
         forward_pass(inputs);
 
@@ -111,6 +134,12 @@ private:
         (hidden1.biases *= cfg::weight_decay) += hidden1.biases_gradient;
     }
 
+    /**
+     * @brief Predict classes for a batch of inputs
+     *
+     * @param inputs Input batch to predict
+     * @return labels_t Predicted labels for the input batch
+     */
     labels_t predict_batch(const input_t& inputs) {
         forward_pass(inputs);
 
@@ -127,6 +156,13 @@ private:
         return result;
     }
 
+    /**
+     * @brief Calculate accuracy on the validation set
+     *
+     * @param inputs Validation input data
+     * @param labels Validation labels
+     * @return float Accuracy of the model on the validation set
+     */
     float validation_set_accuracy(csv& inputs, csv& labels) {
         unsigned hits = 0;
         for (std::size_t i = 0; i < validation_set_size / cfg::batch_size; ++i) {
@@ -143,6 +179,15 @@ private:
     }
 
 public:
+    /**
+     * @brief Train the neural network
+     *
+     * Performs batch training with early stopping based on validation accuracy.
+     * The learning algorithm is SGD with momentum and weight decay.
+     *
+     * @param inputs Training input data
+     * @param labels Training labels
+     */
     void learn(csv& inputs, csv& labels) {
         std::cout << std::setprecision(std::numeric_limits<long double>::digits10 + 1)
                 << "Hyperparameters:"
@@ -176,6 +221,13 @@ public:
         }
     }
 
+    /**
+     * @brief Generate predictions for a dataset
+     *
+     * @tparam SIZE Number of inputs in the dataset
+     * @param inputs CSV file with input data
+     * @param out CSV file to write predictions to
+     */
     template<unsigned SIZE>
     void predict(csv& inputs, csv& out) {
         for (std::size_t i = 0; i < SIZE / cfg::batch_size; ++i) {
