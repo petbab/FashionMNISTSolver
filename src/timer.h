@@ -20,6 +20,10 @@ public:
         out << name << ": " << minutes << ' ' << seconds << '\n';
     }
 
+    auto duration() {
+        return std::chrono::steady_clock::now() - start;
+    }
+
 private:
     std::ostream& out;
     std::string name;

@@ -5,18 +5,21 @@
 #include "activation.h"
 #include "csv.h"
 #include "hyperparameters.h"
+#include "timer.h"
 
 #include <iostream>
 #include <iomanip>
 #include <array>
 #include <limits>
+#include <chrono>
 
+using namespace std::chrono_literals;
 
 class network {
 public:
     // Learning limits
     static constexpr float accuracy_threshold = 0.882;
-    static constexpr unsigned max_epochs = 40;
+    static constexpr std::chrono::duration time_limit = 9min;
 
     // Inputs
     static constexpr unsigned validation_set_size = 5'000;
@@ -189,6 +192,8 @@ public:
      * @param labels Training labels
      */
     void learn(csv& inputs, csv& labels) {
+        timer t{std::cout, "Learning time"};
+
         std::cout << std::setprecision(std::numeric_limits<long double>::digits10 + 1)
                 << "Hyperparameters:"
                 << "\n    learning_rate = " << cfg::learning_rate
@@ -201,10 +206,11 @@ public:
         std::cout << std::fixed << std::setprecision(2);
 
         float accuracy = 0, prev_accuracy = 0;
-        for (unsigned epoch = 0; epoch < max_epochs; ++epoch) {
-            if (prev_accuracy >= accuracy_threshold && accuracy < prev_accuracy)
-                return;
-
+        for (
+            unsigned epoch = 0;
+            (prev_accuracy < accuracy_threshold || accuracy >= prev_accuracy) && t.duration() < time_limit;
+            ++epoch
+        ) {
             for (std::size_t i = 0; i < training_set_size / cfg::batch_size; ++i) {
                 auto input = inputs.read_batch<cfg::batch_size, input_size>();
                 auto label = labels.read_batch_labels<labels_t, cfg::batch_size>();
