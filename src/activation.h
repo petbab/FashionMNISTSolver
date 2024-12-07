@@ -6,32 +6,32 @@
 #include <cmath>
 
 
-inline float linear(float x) {
+inline double linear(double x) {
     return x;
 }
 
-inline float dlinear(float) {
+inline double dlinear(double) {
     return 1;
 }
 
-inline float ReLU(float x) {
+inline double ReLU(double x) {
     return x > 0 ? x : 0;
 }
 
-inline float dReLU(float x) {
+inline double dReLU(double x) {
     return x > 0 ? 1 : 0;
 }
 
-inline float sigmoid(float x) {
+inline double sigmoid(double x) {
     return 1 / (1 + std::exp(-x));
 }
 
-inline float dsigmoid(float x) {
-    float e_x = std::exp(-x);
+inline double dsigmoid(double x) {
+    double e_x = std::exp(-x);
     return e_x / ((1 + e_x) * (1 + e_x));
 }
 
-typedef float(*unary_f)(float);
+typedef double(*unary_f)(double);
 
 template<unary_f F, unsigned COLS, unsigned ROWS>
 matrix<COLS, ROWS> apply(const matrix<COLS, ROWS>& xs) {
@@ -45,7 +45,7 @@ template<unsigned BATCH_SIZE, unsigned NEURONS>
 matrix<BATCH_SIZE, NEURONS> softmax(const matrix<BATCH_SIZE, NEURONS> &potentials) {
     matrix<BATCH_SIZE, NEURONS> result;
     for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
-        float denom = 0.;
+        double denom = 0.;
         for (std::size_t neuron = 0; neuron < NEURONS; ++neuron)
             denom += std::exp(potentials[batch, neuron]);
 

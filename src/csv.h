@@ -37,9 +37,9 @@ public:
 
         for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
             for (std::size_t i = 0; i < INPUT_SIZE; ++i) {
-                float color;
+                double color;
                 file >> color;
-                result[batch, i] = color / 255.f;
+                result[batch, i] = color / 255.;
                 file.get();
             }
         }

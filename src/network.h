@@ -18,7 +18,7 @@ using namespace std::chrono_literals;
 class network {
 public:
     // Learning limits
-    static constexpr float accuracy_threshold = 0.882;
+    static constexpr double accuracy_threshold = 0.881;
     static constexpr std::chrono::duration time_limit = 9min;
     static constexpr unsigned epochs_after_threshold = 5;
 
@@ -26,6 +26,10 @@ public:
     static constexpr unsigned validation_set_size = 5'000;
     static constexpr unsigned training_set_size = 60'000 - validation_set_size;
     static constexpr unsigned test_set_size = 10'000;
+
+    static_assert(validation_set_size % cfg::batch_size == 0);
+    static_assert(training_set_size % cfg::batch_size == 0);
+    static_assert(test_set_size % cfg::batch_size == 0);
 
     static constexpr unsigned input_size = 28 * 28;
     static constexpr unsigned output_size = 10;
@@ -174,7 +178,7 @@ private:
 
         labels_t result;
         for (std::size_t k = 0; k < cfg::batch_size; ++k) {
-            float max_value = 0;
+            double max_value = 0;
             for (std::size_t i = 0; i < output_layer_t::neurons; ++i) {
                 if (output.activations[k, i] > max_value) {
                     max_value = output.activations[k, i];
@@ -190,9 +194,9 @@ private:
      *
      * @param inputs Validation input data
      * @param labels Validation labels
-     * @return float Accuracy of the model on the validation set
+     * @return double Accuracy of the model on the validation set
      */
-    float validation_set_accuracy(csv& inputs, csv& labels) {
+    double validation_set_accuracy(csv& inputs, csv& labels) {
         unsigned hits = 0;
         for (std::size_t i = 0; i < validation_set_size / cfg::batch_size; ++i) {
             auto input = inputs.read_batch<cfg::batch_size, input_size>();
@@ -204,7 +208,7 @@ private:
                     ++hits;
         }
 
-        return static_cast<float>(hits) / static_cast<float>(validation_set_size);
+        return static_cast<double>(hits) / static_cast<double>(validation_set_size);
     }
 
     /**
@@ -240,19 +244,10 @@ public:
      */
     void learn(csv& inputs, csv& labels) {
         timer t{std::cout, "Learning time"};
-
-        std::cout << std::fixed << std::setprecision(8)
-                << "Hyperparameters:"
-                << "\n    learning_rate   = " << cfg::learning_rate
-                << "\n    momentum        = " << cfg::momentum
-                << "\n    weight_decay    = " << cfg::weight_decay
-                << "\n    hidden1_neurons = " << cfg::hidden1_neurons
-                << "\n    hidden2_neurons = " << cfg::hidden2_neurons
-                << "\n    batch_size      = " << cfg::batch_size << '\n'
-                << std::setprecision(2);
+        std::cout << std::fixed << std::setprecision(2);
 
         unsigned best_epoch = 0;
-        float accuracy = 0, best_accuracy = 0;
+        double accuracy = 0, best_accuracy = 0;
         for (
             unsigned epoch = 0;
             t.duration() < time_limit && (best_accuracy <= accuracy_threshold || epoch - best_epoch <= epochs_after_threshold);

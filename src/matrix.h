@@ -11,8 +11,8 @@
 
 template<unsigned COLS, unsigned ROWS>
 struct matrix {
-    matrix() : data{std::vector<float>(COLS * ROWS)} {}
-    explicit matrix(float x) : matrix() {
+    matrix() : data{std::vector<double>(COLS * ROWS)} {}
+    explicit matrix(double x) : matrix() {
         std::ranges::fill(data, x);
     }
 
@@ -38,7 +38,7 @@ struct matrix {
         matrix<NEW_COLS, ROWS> result;
         for (std::size_t l_row = 0; l_row < ROWS; ++l_row) {
             for (std::size_t r_col = 0; r_col < NEW_COLS; ++r_col) {
-                float sum = 0;
+                double sum = 0;
                 for (std::size_t l_col = 0; l_col < COLS; ++l_col)
                     sum += l[l_col, l_row] * r[r_col, l_col];
                 result[r_col, l_row] = sum;
@@ -59,22 +59,22 @@ struct matrix {
         return a;
     }
 
-    matrix& operator*=(float x) {
+    matrix& operator*=(double x) {
         for (std::size_t i = 0; i < ROWS * COLS; ++i)
             data[i] *= x;
         return *this;
     }
-    friend matrix operator*(float x, matrix m) {
+    friend matrix operator*(double x, matrix m) {
         m *= x;
         return m;
     }
 
-    matrix& operator/=(float x) {
+    matrix& operator/=(double x) {
         for (std::size_t i = 0; i < ROWS * COLS; ++i)
             data[i] /= x;
         return *this;
     }
-    friend matrix operator/(matrix m, float x) {
+    friend matrix operator/(matrix m, double x) {
         m /= x;
         return m;
     }
@@ -99,41 +99,41 @@ struct matrix {
         return m1;
     }
 
-    float operator[](std::size_t col, std::size_t row) const {
+    double operator[](std::size_t col, std::size_t row) const {
         return data[row * COLS + col];
     }
-    float& operator[](std::size_t col, std::size_t row) {
+    double& operator[](std::size_t col, std::size_t row) {
         return data[row * COLS + col];
     }
 
-    float operator[](std::size_t i) const {
+    double operator[](std::size_t i) const {
         return data[i];
     }
-    float& operator[](std::size_t i) {
+    double& operator[](std::size_t i) {
         return data[i];
     }
 
     static constexpr unsigned cols = COLS, rows = ROWS;
 
 private:
-    std::vector<float> data;
+    std::vector<double> data;
 };
 
 
 namespace init {
     enum class random_t { normal_glorot, normal_he };
 
-    static std::default_random_engine engine{1};
+    static std::default_random_engine engine{42};
 
     template<unsigned PREV_NEURONS, unsigned NEURONS>
-    float normal_glorot() {
-        static std::normal_distribution d(0., 2. / static_cast<float>(PREV_NEURONS + NEURONS));
+    double normal_glorot() {
+        static std::normal_distribution d(0., 2. / static_cast<double>(PREV_NEURONS + NEURONS));
         return d(engine);
     }
 
     template<unsigned PREV_NEURONS>
-    float normal_he() {
-        static std::normal_distribution d(0., 2. / static_cast<float>(PREV_NEURONS));
+    double normal_he() {
+        static std::normal_distribution d(0., 2. / static_cast<double>(PREV_NEURONS));
         return d(engine);
     }
 

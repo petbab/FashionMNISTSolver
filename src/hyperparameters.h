@@ -3,12 +3,14 @@
 
 namespace cfg {
 
-static constexpr float learning_rate = 0.001f;
-static constexpr float momentum = 0.5f;
-static constexpr float weight_decay = 0.99999f;
-static constexpr unsigned hidden1_neurons = 32;
-static constexpr unsigned hidden2_neurons = 16;
-static constexpr unsigned batch_size = 8;
+static constexpr double learning_rate = .001;
+static constexpr double momentum = .6;
+static constexpr double weight_decay = 1. - 1e-8;
+
+static constexpr unsigned hidden1_neurons = 64;
+static constexpr unsigned hidden2_neurons = 32;
+
+static constexpr unsigned batch_size = 25;
 
 }
 
