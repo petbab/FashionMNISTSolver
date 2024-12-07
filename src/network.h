@@ -20,6 +20,7 @@ public:
     // Learning limits
     static constexpr float accuracy_threshold = 0.882;
     static constexpr std::chrono::duration time_limit = 9min;
+    static constexpr unsigned epochs_after_threshold = 5;
 
     // Inputs
     static constexpr unsigned validation_set_size = 5'000;
@@ -97,7 +98,15 @@ private:
             (biases *= cfg::weight_decay) += biases_gradient;
         }
 
-        weights_t weights, weights_gradient;
+        void save_optimal_weights() {
+            optimal_weights = weights;
+        }
+
+        void load_optimal_weights() {
+            weights = optimal_weights;
+        }
+
+        weights_t weights, weights_gradient, optimal_weights;
         biases_t biases, biases_gradient;
         neurons_t potentials, activations;
     };
@@ -198,12 +207,33 @@ private:
         return static_cast<float>(hits) / static_cast<float>(validation_set_size);
     }
 
+    /**
+     * @brief Save the current weights as optimal
+     */
+    void save_optimal_weights() {
+        output.save_optimal_weights();
+        hidden2.save_optimal_weights();
+        hidden1.save_optimal_weights();
+    }
+
+    /**
+     * @brief Load the optimal weights after learning
+     */
+    void load_optimal_weights() {
+        output.load_optimal_weights();
+        hidden2.load_optimal_weights();
+        hidden1.load_optimal_weights();
+    }
+
 public:
     /**
      * @brief Train the neural network
      *
-     * Performs batch training with early stopping based on validation accuracy.
      * The learning algorithm is SGD with momentum and weight decay.
+     * When the network reaches the `accuracy_threshold`, the learning
+     * algorithm computes `epochs_after_threshold` epochs and then stops.
+     * If the network surpasses the `best_accuracy` in the extra epochs,
+     * the algorithm continues with another round of extra epochs.
      *
      * @param inputs Training input data
      * @param labels Training labels
@@ -211,37 +241,43 @@ public:
     void learn(csv& inputs, csv& labels) {
         timer t{std::cout, "Learning time"};
 
-        std::cout << std::setprecision(std::numeric_limits<long double>::digits10 + 1)
+        std::cout << std::fixed << std::setprecision(8)
                 << "Hyperparameters:"
-                << "\n    learning_rate = " << cfg::learning_rate
-                << "\n    momentum = " << cfg::momentum
-                << "\n    weight_decay = " << cfg::weight_decay
+                << "\n    learning_rate   = " << cfg::learning_rate
+                << "\n    momentum        = " << cfg::momentum
+                << "\n    weight_decay    = " << cfg::weight_decay
                 << "\n    hidden1_neurons = " << cfg::hidden1_neurons
                 << "\n    hidden2_neurons = " << cfg::hidden2_neurons
-                << "\n    batch_size = " << cfg::batch_size << '\n';
+                << "\n    batch_size      = " << cfg::batch_size << '\n'
+                << std::setprecision(2);
 
-        std::cout << std::fixed << std::setprecision(2);
-
-        float accuracy = 0, prev_accuracy = 0;
+        unsigned best_epoch = 0;
+        float accuracy = 0, best_accuracy = 0;
         for (
             unsigned epoch = 0;
-            (prev_accuracy < accuracy_threshold || accuracy >= prev_accuracy) && t.duration() < time_limit;
+            t.duration() < time_limit && (best_accuracy <= accuracy_threshold || epoch - best_epoch <= epochs_after_threshold);
             ++epoch
         ) {
             for (std::size_t i = 0; i < training_set_size / cfg::batch_size; ++i) {
                 auto input = inputs.read_batch<cfg::batch_size, input_size>();
                 auto label = labels.read_batch_labels<labels_t, cfg::batch_size>();
-
                 backpropagation(input, label);
             }
 
-            prev_accuracy = accuracy;
             accuracy = validation_set_accuracy(inputs, labels);
-            inputs.seek_begin();
-            labels.seek_begin();
+            if (accuracy > accuracy_threshold && accuracy > best_accuracy) {
+                save_optimal_weights();
+                best_accuracy = accuracy;
+                best_epoch = epoch;
+            }
 
             std::cout << "Accuracy after epoch " << epoch << ": " << accuracy * 100.f << "%\n";
+            
+            inputs.seek_begin();
+            labels.seek_begin();
         }
+        
+        load_optimal_weights();
     }
 
     /**
