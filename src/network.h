@@ -63,6 +63,40 @@ private:
                     potentials[j, i] += biases[i];
         }
 
+        /**
+         * @brief Compute gradient for backpropagation
+         *
+         * Calculates gradients for weights, biases, and propagates error to previous layer
+         *
+         * @tparam NEXT_NEURONS Number of neurons in the next layer
+         * @param next_dE_dPotential Gradient of error with respect to potentials in the next layer
+         * @param next_weights Weights matrix of the next layer
+         * @param input Input matrix from the previous layer
+         *
+         * @return Gradient of error with respect to potentials in the current layer
+         */
+        template<unsigned NEXT_NEURONS>
+        neurons_t compute_gradient(const matrix<cfg::batch_size, NEXT_NEURONS>& next_dE_dPotential,
+                                   const matrix<NEURONS, NEXT_NEURONS>& next_weights,
+                                   const matrix<cfg::batch_size, PREV_NEURONS>& input) {
+            // Compute gradient
+            neurons_t dE_dy = next_weights.transpose() * next_dE_dPotential;
+            neurons_t dE_dPotential = pmult(apply<dReLU>(potentials), dE_dy);
+            weights_t dE_dw = dE_dPotential * input.transpose();
+            biases_t dE_dbias = dE_dPotential * matrix<1, cfg::batch_size>{1.f};
+
+            // Update gradients with momentum
+            weights_gradient = cfg::momentum * weights_gradient - cfg::learning_rate * dE_dw;
+            biases_gradient = cfg::momentum * biases_gradient - cfg::learning_rate * dE_dbias;
+
+            return dE_dPotential;
+        }
+
+        void update_weights() {
+            (weights *= cfg::weight_decay) += weights_gradient;
+            (biases *= cfg::weight_decay) += biases_gradient;
+        }
+
         weights_t weights, weights_gradient;
         biases_t biases, biases_gradient;
         neurons_t potentials, activations;
@@ -74,6 +108,7 @@ private:
 
     /**
      * @brief Perform forward propagation through the network.
+     *
      * Compute inner potentials and activations.
      * The activation functions are ReLU in the hidden layers and softmax in the output layer.
      *
@@ -105,36 +140,18 @@ private:
         for (std::size_t k = 0; k < cfg::batch_size; ++k)
             output_dE_dPotential[k, labels[k]] -= 1.f;
         output_layer_t::weights_t output_dE_dw = output_dE_dPotential * hidden2.activations.transpose();
-        auto ones = matrix<1, cfg::batch_size>{1.f};
-        output_layer_t::biases_t output_dE_dbias = output_dE_dPotential * ones;
+        output_layer_t::biases_t output_dE_dbias = output_dE_dPotential * matrix<1, cfg::batch_size>{1.f};
 
-        // Second hidden layer gradient
-        auto hidden2_dE_dy = output.weights.transpose() * output_dE_dPotential;
-        auto hidden2_dE_dy_dsigma = pmult(apply<dReLU>(hidden2.potentials), hidden2_dE_dy);
-        hidden2_layer_t::weights_t hidden2_dE_dw = hidden2_dE_dy_dsigma * hidden1.activations.transpose();
-        hidden2_layer_t::biases_t hidden2_dE_dbias = hidden2_dE_dy_dsigma * ones;
-
-        // First hidden layer gradient
-        auto hidden1_dE_dy = hidden2.weights.transpose() * hidden2_dE_dy_dsigma;
-        auto hidden1_dE_dy_dsigma = pmult(apply<dReLU>(hidden1.potentials), hidden1_dE_dy);
-        hidden1_layer_t::weights_t hidden1_dE_dw = hidden1_dE_dy_dsigma * inputs.transpose();
-        hidden1_layer_t::biases_t hidden1_dE_dbias = hidden1_dE_dy_dsigma * ones;
+        auto hidden2_dE_dPotential = hidden2.compute_gradient(output_dE_dPotential, output.weights, hidden1.activations);
+        hidden1.compute_gradient(hidden2_dE_dPotential, hidden2.weights, inputs);
 
         // Update gradients with momentum
         output.weights_gradient = cfg::momentum * output.weights_gradient - cfg::learning_rate * output_dE_dw;
         output.biases_gradient = cfg::momentum * output.biases_gradient - cfg::learning_rate * output_dE_dbias;
-        hidden2.weights_gradient = cfg::momentum * hidden2.weights_gradient - cfg::learning_rate * hidden2_dE_dw;
-        hidden2.biases_gradient = cfg::momentum * hidden2.biases_gradient - cfg::learning_rate * hidden2_dE_dbias;
-        hidden1.weights_gradient = cfg::momentum * hidden1.weights_gradient - cfg::learning_rate * hidden1_dE_dw;
-        hidden1.biases_gradient = cfg::momentum * hidden1.biases_gradient - cfg::learning_rate * hidden1_dE_dbias;
 
-        // Update weights
-        (output.weights *= cfg::weight_decay) += output.weights_gradient;
-        (output.biases *= cfg::weight_decay) += output.biases_gradient;
-        (hidden2.weights *= cfg::weight_decay) += hidden2.weights_gradient;
-        (hidden2.biases *= cfg::weight_decay) += hidden2.biases_gradient;
-        (hidden1.weights *= cfg::weight_decay) += hidden1.weights_gradient;
-        (hidden1.biases *= cfg::weight_decay) += hidden1.biases_gradient;
+        output.update_weights();
+        hidden2.update_weights();
+        hidden1.update_weights();
     }
 
     /**

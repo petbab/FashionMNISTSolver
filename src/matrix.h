@@ -123,7 +123,7 @@ private:
 namespace init {
     enum class random_t { normal_glorot, normal_he };
 
-    static std::default_random_engine engine{42};
+    static std::default_random_engine engine{1};
 
     template<unsigned PREV_NEURONS, unsigned NEURONS>
     float normal_glorot() {
