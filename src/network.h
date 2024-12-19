@@ -196,11 +196,11 @@ private:
      * @param labels Validation labels
      * @return double Accuracy of the model on the validation set
      */
-    double validation_set_accuracy(csv& inputs, csv& labels) {
+    double validation_set_accuracy(csv_image_reader& inputs, csv_label_reader& labels) {
         unsigned hits = 0;
         for (std::size_t i = 0; i < validation_set_size / cfg::batch_size; ++i) {
             auto input = inputs.read_batch<cfg::batch_size, input_size>();
-            auto label = labels.read_batch_labels<labels_t, cfg::batch_size>();
+            auto label = labels.read_batch<labels_t, cfg::batch_size>();
             auto prediction = predict_batch(input);
 
             for (std::size_t k = 0; k < cfg::batch_size; ++k)
@@ -242,7 +242,7 @@ public:
      * @param inputs Training input data
      * @param labels Training labels
      */
-    void learn(csv& inputs, csv& labels) {
+    void learn(csv_image_reader& inputs, csv_label_reader& labels) {
         timer t{std::cout, "Learning time"};
         std::cout << std::fixed << std::setprecision(2);
 
@@ -255,7 +255,7 @@ public:
         ) {
             for (std::size_t i = 0; i < training_set_size / cfg::batch_size; ++i) {
                 auto input = inputs.read_batch<cfg::batch_size, input_size>();
-                auto label = labels.read_batch_labels<labels_t, cfg::batch_size>();
+                auto label = labels.read_batch<labels_t, cfg::batch_size>();
                 backpropagation(input, label);
             }
 
@@ -283,7 +283,7 @@ public:
      * @param out CSV file to write predictions to
      */
     template<unsigned SIZE>
-    void predict(csv& inputs, csv& out) {
+    void predict(csv_image_reader& inputs, csv_writer& out) {
         for (std::size_t i = 0; i < SIZE / cfg::batch_size; ++i) {
             auto input = inputs.read_batch<cfg::batch_size, input_size>();
             out.write_batch(predict_batch(input));

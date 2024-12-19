@@ -5,46 +5,94 @@
 #include "matrix.h"
 
 
-class csv {
+class csv_reader {
 public:
-    enum class mode_t { read, write };
-
-    csv(const std::string &file_path, mode_t mode) {
-        switch (mode) {
-        case mode_t::read:
-            file = std::fstream{file_path, std::ios::in};
-            break;
-        case mode_t::write:
-            file = std::fstream{file_path, std::ios::out | std::ios::trunc};
-            break;
-        }
-
+    explicit csv_reader(const std::string &file_path) : file{file_path} {
         if (!file.is_open())
             throw std::runtime_error("Could not open file: " + file_path);
     }
 
+    void seek_begin() {
+        file.seekg(0);
+    }
+
+protected:
+    std::ifstream file;
+};
+
+class csv_image_reader : public csv_reader {
+    explicit csv_image_reader(const std::string &file_path)
+            : csv_reader(file_path), mean{0.}, sd{0.} {}
+
+public:
+    csv_image_reader(const std::string &file_path, double mean, double sd)
+        : csv_reader(file_path), mean{mean}, sd{sd} {}
+
+    template<unsigned DATASET_SIZE, unsigned BATCH_SIZE, unsigned INPUT_SIZE>
+    static csv_image_reader with_statistics(const std::string &file_path) {
+        csv_image_reader reader{file_path};
+
+        for (std::size_t i = 0; i < DATASET_SIZE / BATCH_SIZE; ++i) {
+            matrix batch = reader.read_batch<BATCH_SIZE, INPUT_SIZE>(false);
+            for (std::size_t j = 0; j < BATCH_SIZE * INPUT_SIZE; ++j)
+                reader.mean += batch[j];
+        }
+        auto n = static_cast<double>(DATASET_SIZE * INPUT_SIZE);
+        reader.mean /= n;
+        reader.seek_begin();
+
+        for (std::size_t i = 0; i < DATASET_SIZE / BATCH_SIZE; ++i) {
+            matrix batch = reader.read_batch<BATCH_SIZE, INPUT_SIZE>(false);
+            for (std::size_t j = 0; j < BATCH_SIZE * INPUT_SIZE; ++j)
+                reader.sd += std::pow(batch[j] - reader.mean, 2.);
+        }
+        reader.sd = std::sqrt(reader.sd / n);
+        reader.seek_begin();
+
+        return reader;
+    }
+
+    template<unsigned BATCH_SIZE, unsigned INPUT_SIZE>
+    matrix<BATCH_SIZE, INPUT_SIZE> read_batch(bool normalize = true) {
+        matrix<BATCH_SIZE, INPUT_SIZE> result;
+
+        for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
+            for (std::size_t i = 0; i < INPUT_SIZE; ++i) {
+                file >> result[batch, i];
+                file.get();
+            }
+        }
+
+        if (normalize)
+            result.normalize(mean, sd);
+        return result;
+    }
+
+    double get_mean() const { return mean; }
+    double get_sd() const { return sd; }
+
+private:
+    double mean, sd;
+};
+
+class csv_label_reader : public csv_reader {
+public:
+    using csv_reader::csv_reader;
+
     template<class LABELS_T, unsigned BATCH_SIZE>
-    LABELS_T read_batch_labels() {
+    LABELS_T read_batch() {
         LABELS_T result;
         for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch)
             file >> result[batch];
         return result;
     }
+};
 
-    template<unsigned BATCH_SIZE, unsigned INPUT_SIZE>
-    matrix<BATCH_SIZE, INPUT_SIZE> read_batch() {
-        matrix<BATCH_SIZE, INPUT_SIZE> result;
-
-        for (std::size_t batch = 0; batch < BATCH_SIZE; ++batch) {
-            for (std::size_t i = 0; i < INPUT_SIZE; ++i) {
-                double color;
-                file >> color;
-                result[batch, i] = color / 255.;
-                file.get();
-            }
-        }
-
-        return result;
+class csv_writer {
+public:
+    explicit csv_writer(const std::string &file_path) : file{file_path, std::ios::out | std::ios::trunc} {
+        if (!file.is_open())
+            throw std::runtime_error("Could not open file: " + file_path);
     }
 
     void write_batch(const auto& batch) {
@@ -52,12 +100,8 @@ public:
             file << label << '\n';
     }
 
-    void seek_begin() {
-        file.seekg(0);
-    }
-
 private:
-    std::fstream file;
+    std::ofstream file;
 };
 
 

@@ -25,6 +25,11 @@ struct matrix {
         }
     }
 
+    void normalize(double mean, double sd) {
+        for (std::size_t i = 0; i < ROWS * COLS; ++i)
+            data[i] = (data[i] - mean) / sd;
+    }
+
     matrix<ROWS, COLS> transpose() const {
         matrix<ROWS, COLS> transposed;
         for (std::size_t col = 0; col < COLS; ++col)
