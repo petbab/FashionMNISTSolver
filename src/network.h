@@ -18,9 +18,8 @@ using namespace std::chrono_literals;
 class network {
 public:
     // Learning limits
-    static constexpr double accuracy_threshold = 0.881;
     static constexpr std::chrono::duration time_limit = 9min;
-    static constexpr unsigned epochs_after_threshold = 5;
+    static constexpr unsigned epochs_after_threshold = 10;
 
     // Inputs
     static constexpr unsigned validation_set_size = 5'000;
@@ -91,15 +90,15 @@ private:
             biases_t dE_dbias = dE_dPotential * matrix<1, cfg::batch_size>{1.f};
 
             // Update gradients with momentum
-            weights_gradient = cfg::momentum * weights_gradient - cfg::learning_rate * dE_dw;
-            biases_gradient = cfg::momentum * biases_gradient - cfg::learning_rate * dE_dbias;
+            weights_gradient = cfg::momentum * weights_gradient + cfg::learning_rate * dE_dw;
+            biases_gradient = cfg::momentum * biases_gradient + cfg::learning_rate * dE_dbias;
 
             return dE_dPotential;
         }
 
         void update_weights() {
-            (weights *= cfg::weight_decay) += weights_gradient;
-            (biases *= cfg::weight_decay) += biases_gradient;
+            (weights *= cfg::weight_decay) -= weights_gradient;
+            (biases *= cfg::weight_decay) -= biases_gradient;
         }
 
         void save_optimal_weights() {
@@ -159,8 +158,8 @@ private:
         hidden1.compute_gradient(hidden2_dE_dPotential, hidden2.weights, inputs);
 
         // Update gradients with momentum
-        output.weights_gradient = cfg::momentum * output.weights_gradient - cfg::learning_rate * output_dE_dw;
-        output.biases_gradient = cfg::momentum * output.biases_gradient - cfg::learning_rate * output_dE_dbias;
+        output.weights_gradient = cfg::momentum * output.weights_gradient + cfg::learning_rate * output_dE_dw;
+        output.biases_gradient = cfg::momentum * output.biases_gradient + cfg::learning_rate * output_dE_dbias;
 
         output.update_weights();
         hidden2.update_weights();
@@ -247,10 +246,10 @@ public:
         std::cout << std::fixed << std::setprecision(2);
 
         unsigned best_epoch = 0;
-        double accuracy = 0, best_accuracy = 0;
+        double best_accuracy = 0;
         for (
             unsigned epoch = 0;
-            t.duration() < time_limit && (best_accuracy <= accuracy_threshold || epoch - best_epoch <= epochs_after_threshold);
+            t.duration() < time_limit && epoch - best_epoch <= epochs_after_threshold;
             ++epoch
         ) {
             for (std::size_t i = 0; i < training_set_size / cfg::batch_size; ++i) {
@@ -259,8 +258,8 @@ public:
                 backpropagation(input, label);
             }
 
-            accuracy = validation_set_accuracy(inputs, labels);
-            if (accuracy > accuracy_threshold && accuracy > best_accuracy) {
+            auto accuracy = validation_set_accuracy(inputs, labels);
+            if (accuracy > best_accuracy) {
                 save_optimal_weights();
                 best_accuracy = accuracy;
                 best_epoch = epoch;
