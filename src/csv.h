@@ -28,6 +28,24 @@ public:
     csv_image_reader(const std::string &file_path, double mean, double sd)
         : csv_reader(file_path), mean{mean}, sd{sd} {}
 
+    /**
+     * @brief Creates a CSV image reader with pre-calculated mean and standard deviation statistics
+     *
+     * @tparam DATASET_SIZE Total number of images in the dataset
+     * @tparam BATCH_SIZE Number of images to read in each batch
+     * @tparam INPUT_SIZE Size of each input image (number of pixels)
+     *
+     * @param file_path Path to the CSV file containing image data
+     *
+     * @return csv_image_reader Instance initialized with calculated mean and standard deviation
+     *
+     * @details This function performs two passes over the dataset:
+     *          1. First pass calculates the mean across all pixels/features
+     *          2. Second pass calculates the standard deviation using the computed mean
+     *
+     * The statistics are stored in the reader's mean and sd members respectively.
+     * After calculation, the reader is reset to the beginning of the file.
+     */
     template<unsigned DATASET_SIZE, unsigned BATCH_SIZE, unsigned INPUT_SIZE>
     static csv_image_reader with_statistics(const std::string &file_path) {
         csv_image_reader reader{file_path};
